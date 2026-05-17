@@ -9,34 +9,38 @@ error NotOwner();
 contract FundMe {
     using PriceConverter for uint256;
 
-    uint256 public minimumUsd = 5 * 1e18;
-    address public owner;
+    uint256 public constant MINIMUM_USD = 5e18;
+
+    address public immutable i_owner;
     mapping(address => uint256) public addressToAmountFunded;
 
-    AggregatorV3Interface public priceFeed;
+    AggregatorV3Interface private s_priceFeed;
 
-    constructor(address priceFeedAddress) {
-        owner = msg.sender;
-        priceFeed = AggregatorV3Interface(priceFeedAddress);
+    constructor(address priceFeed) {
+        i_owner = msg.sender;
+        s_priceFeed = AggregatorV3Interface(priceFeed);
     }
 
     function fund() public payable {
-        // require(
-        //     msg.value.getConversionRate(priceFeed) >= minimumUsd,
-        //     "Didn't send enough ETH"
-        // );
+        require(
+            msg.value.getConversionRate(s_priceFeed) >= MINIMUM_USD,
+            "Didn't send enough ETH"
+        );
 
         addressToAmountFunded[msg.sender] += msg.value;
     }
 
     function withdraw() public {
-        if (msg.sender != owner) {
-            revert NotOwner();
-        }
+        if (msg.sender != i_owner) revert NotOwner();
 
-        address payable _owner = payable(msg.sender);
+        (bool success, ) = payable(i_owner).call{value: address(this).balance}(
+            ""
+        );
 
-        (bool success, ) = _owner.call{value: address(this).balance}("");
-        require(success, "Call failed");
+        require(success, "Withdraw failed");
+    }
+
+    function getVersion() public view returns (uint256) {
+        return s_priceFeed.version();
     }
 }

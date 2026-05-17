@@ -3,65 +3,72 @@ pragma solidity ^0.8.20;
 
 import {Test, console} from "forge-std/Test.sol";
 import {FundMe} from "../src/FundMe.sol";
+import {DeployFundMe} from "../script/DeployFundMe.s.sol";
 
 contract FundMeTest is Test {
     FundMe fundMe;
+    DeployFundMe deployFundMe;
+
+    address USER = makeAddr("user");
 
     function setUp() public {
-        fundMe = new FundMe(address(1));
+        deployFundMe = new DeployFundMe();
+        fundMe = deployFundMe.run();
     }
 
-    function testMinimumDollarIsFive() public {
-        assertEq(fundMe.minimumUsd(), 5e18);
+    function testMinimumDollarIsFive() public view {
+        assertEq(fundMe.MINIMUM_USD(), 5e18);
     }
 
-    function testOwnerIsMsgSender() public {
-        assertEq(fundMe.owner(), address(this));
+    function testOwnerIsMsgSender() public view {
+        assertEq(fundMe.i_owner(), msg.sender);
     }
 
     function testFundUpdatesFundedDataStructure() public {
-        address user = makeAddr("user");
-        vm.deal(user, 10 ether);
+        vm.deal(USER, 10 ether);
 
-        vm.prank(user);
+        vm.prank(USER);
         fundMe.fund{value: 1 ether}();
 
-        assertEq(fundMe.addressToAmountFunded(user), 1 ether);
+        assertEq(fundMe.addressToAmountFunded(USER), 1 ether);
     }
 
     function testOnlyOwnerCanWithdraw() public {
-        address user = makeAddr("user");
-        vm.deal(user, 10 ether);
+        vm.deal(USER, 10 ether);
 
-        vm.prank(user);
+        vm.prank(USER);
         fundMe.fund{value: 1 ether}();
 
-        vm.prank(user);
+        vm.prank(USER);
         vm.expectRevert();
 
         fundMe.withdraw();
     }
 
     function testOwnerCanWithdraw() public {
-        address user = makeAddr("user");
-        vm.deal(user, 10 ether);
+        vm.deal(USER, 10 ether);
 
-        vm.prank(user);
+        vm.prank(USER);
         fundMe.fund{value: 1 ether}();
 
-        uint256 startingOwnerBalance = address(fundMe.owner()).balance;
+        uint256 startingOwnerBalance = fundMe.i_owner().balance;
         uint256 startingFundMeBalance = address(fundMe).balance;
 
+        vm.prank(fundMe.i_owner());
         fundMe.withdraw();
 
-        uint256 endingOwnerBalance = address(fundMe.owner()).balance;
-        uint256 endingFundMeBalance = address(fundMe).balance;
+        uint256 endingOwnerBalance = fundMe.i_owner().balance;
 
-        assertEq(endingFundMeBalance, 0);
+        assertEq(address(fundMe).balance, 0);
         assertEq(
             endingOwnerBalance,
             startingOwnerBalance + startingFundMeBalance
         );
+    }
+
+    function testPriceFeedVersionIsAccurate() public view {
+        uint256 version = fundMe.getVersion();
+        assertEq(version, 4);
     }
 
     receive() external payable {}
