@@ -34,9 +34,9 @@ contract FundMe {
             revert NotOwner();
         }
 
-        (bool success, ) = payable(owner).call{value: address(this).balance}(
-            ""
-        );
+        address payable _owner = payable(msg.sender);
+
+        (bool success, ) = _owner.call{value: address(this).balance}("");
         require(success, "Call failed");
     }
 }
