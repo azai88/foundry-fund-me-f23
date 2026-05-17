@@ -22,10 +22,7 @@ contract FundMe {
     }
 
     function fund() public payable {
-        require(
-            msg.value.getConversionRate(s_priceFeed) >= MINIMUM_USD,
-            "Didn't send enough ETH"
-        );
+        require(msg.value.getConversionRate(s_priceFeed) >= MINIMUM_USD, "Didn't send enough ETH");
 
         addressToAmountFunded[msg.sender] += msg.value;
     }
@@ -33,9 +30,7 @@ contract FundMe {
     function withdraw() public {
         if (msg.sender != i_owner) revert NotOwner();
 
-        (bool success, ) = payable(i_owner).call{value: address(this).balance}(
-            ""
-        );
+        (bool success,) = payable(i_owner).call{value: address(this).balance}("");
 
         require(success, "Withdraw failed");
     }

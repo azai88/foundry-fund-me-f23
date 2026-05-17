@@ -60,10 +60,7 @@ contract FundMeTest is Test {
         uint256 endingOwnerBalance = fundMe.i_owner().balance;
 
         assertEq(address(fundMe).balance, 0);
-        assertEq(
-            endingOwnerBalance,
-            startingOwnerBalance + startingFundMeBalance
-        );
+        assertEq(endingOwnerBalance, startingOwnerBalance + startingFundMeBalance);
     }
 
     function testPriceFeedVersionIsAccurate() public view {
