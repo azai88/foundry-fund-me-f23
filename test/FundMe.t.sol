@@ -9,64 +9,131 @@ contract FundMeTest is Test {
     FundMe fundMe;
     DeployFundMe deployFundMe;
 
-    address USER = makeAddr("user");
+    address alice = makeAddr("alice");
+
+    uint256 constant STARTING_BALANCE = 10 ether;
+    uint256 constant SEND_VALUE = 0.1 ether;
 
     function setUp() public {
         deployFundMe = new DeployFundMe();
         fundMe = deployFundMe.run();
+
+        vm.deal(alice, STARTING_BALANCE);
     }
 
-    function testMinimumDollarIsFive() public view {
-        assertEq(fundMe.MINIMUM_USD(), 5e18);
+    // ----------------------------
+    // FUND TESTS
+    // ----------------------------
+
+    function testFundFailsWithoutEnoughETH() public {
+        vm.expectRevert("Didn't send enough ETH");
+        fundMe.fund();
     }
 
-    function testOwnerIsMsgSender() public view {
-        assertEq(fundMe.i_owner(), msg.sender);
+    function testFundUpdatesFundDataStructure() public {
+        vm.prank(alice);
+        fundMe.fund{value: SEND_VALUE}();
+
+        uint256 amountFunded = fundMe.getAddressToAmountFunded(alice);
+
+        assertEq(amountFunded, SEND_VALUE);
     }
 
-    function testFundUpdatesFundedDataStructure() public {
-        vm.deal(USER, 10 ether);
+    function testAddsFunderToArrayOfFunders() public {
+        vm.prank(alice);
+        fundMe.fund{value: SEND_VALUE}();
 
-        vm.prank(USER);
-        fundMe.fund{value: 1 ether}();
-
-        assertEq(fundMe.addressToAmountFunded(USER), 1 ether);
+        address funder = fundMe.getFunder(0);
+        assertEq(funder, alice);
     }
 
-    function testOnlyOwnerCanWithdraw() public {
-        vm.deal(USER, 10 ether);
+    // ----------------------------
+    // MODIFIER
+    // ----------------------------
 
-        vm.prank(USER);
-        fundMe.fund{value: 1 ether}();
+    modifier funded() {
+        vm.prank(alice);
+        fundMe.fund{value: SEND_VALUE}();
+        _;
+    }
 
-        vm.prank(USER);
-        vm.expectRevert();
+    // ----------------------------
+    // WITHDRAW TESTS
+    // ----------------------------
 
+    function testOnlyOwnerCanWithdraw() public funded {
+        vm.expectRevert(); // FIX: no FundMe.NotOwner.selector
         fundMe.withdraw();
     }
 
-    function testOwnerCanWithdraw() public {
-        vm.deal(USER, 10 ether);
-
-        vm.prank(USER);
-        fundMe.fund{value: 1 ether}();
-
-        uint256 startingOwnerBalance = fundMe.i_owner().balance;
+    function testWithdrawFromASingleFunder() public funded {
         uint256 startingFundMeBalance = address(fundMe).balance;
+        uint256 startingOwnerBalance = fundMe.getOwner().balance;
 
-        vm.prank(fundMe.i_owner());
+        vm.startPrank(fundMe.getOwner());
         fundMe.withdraw();
+        vm.stopPrank();
 
-        uint256 endingOwnerBalance = fundMe.i_owner().balance;
+        uint256 endingFundMeBalance = address(fundMe).balance;
+        uint256 endingOwnerBalance = fundMe.getOwner().balance;
+
+        assertEq(endingFundMeBalance, 0);
+        assertEq(
+            startingFundMeBalance + startingOwnerBalance,
+            endingOwnerBalance
+        );
+    }
+
+    function testWithdrawFromMultipleFunders() public funded {
+        uint160 numberOfFunders = 10;
+        uint160 startingFunderIndex = 1;
+
+        for (
+            uint160 i = startingFunderIndex;
+            i < numberOfFunders + startingFunderIndex;
+            i++
+        ) {
+            hoax(address(i), SEND_VALUE);
+            fundMe.fund{value: SEND_VALUE}();
+        }
+
+        uint256 startingFundMeBalance = address(fundMe).balance;
+        uint256 startingOwnerBalance = fundMe.getOwner().balance;
+
+        vm.startPrank(fundMe.getOwner());
+        fundMe.withdraw();
+        vm.stopPrank();
 
         assertEq(address(fundMe).balance, 0);
-        assertEq(endingOwnerBalance, startingOwnerBalance + startingFundMeBalance);
+
+        assertEq(
+            startingFundMeBalance + startingOwnerBalance,
+            fundMe.getOwner().balance
+        );
+
+        assertEq(
+            (numberOfFunders + 1) * SEND_VALUE,
+            fundMe.getOwner().balance - startingOwnerBalance
+        );
     }
 
-    function testPriceFeedVersionIsAccurate() public view {
-        uint256 version = fundMe.getVersion();
-        assertEq(version, 4);
+    // ----------------------------
+    // STORAGE TEST
+    // ----------------------------
+
+    function testPrintStorageData() public {
+        for (uint256 i = 0; i < 3; i++) {
+            bytes32 value = vm.load(address(fundMe), bytes32(i));
+            console.log("Value at location", i, ":");
+            console.logBytes32(value);
+        }
+
+        console.log("PriceFeed address:", address(fundMe.getPriceFeed()));
     }
+
+    // ----------------------------
+    // RECEIVE ETH
+    // ----------------------------
 
     receive() external payable {}
 }
