@@ -13,3 +13,10 @@ docs/
 # Dotenv file
 .env
 
+broadcast/
+
+.env
+broadcast/
+cache/
+out/
+lib/
